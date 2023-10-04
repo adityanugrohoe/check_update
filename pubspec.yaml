@@ -1,4 +1,4 @@
-name: check_update_plus
+name: check_update
 description: Check if your user has the most recent version of your Flutter app.
 version: 0.0.1
 homepage: https://github.com/47itya/check_update
@@ -28,10 +28,10 @@ plugin:
   platforms:
     android:
       default_package: com.iamadit.check_update
-      pluginClass: check_update_plus
+      pluginClass: check_update
     ios:
       default_package: com.iamadit.check_update
-      pluginClass: check_update_plus
+      pluginClass: check_update
   # To add assets to your package, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
