@@ -147,19 +147,40 @@ class CheckUpdate {
   /// This function attempts to clean local version strings so they match the MAJOR.MINOR.PATCH
   /// versioning pattern, so they can be properly compared with the store version.
   String _getCleanVersion(String version) =>
-      RegExp(r'\d+\.\d+(\.\d+)?').stringMatch(version) ?? '0.0.0';
-  //RegExp(r'\d+\.\d+(\.[a-z]+)?(\.([^"]|\\")*)?').stringMatch(version) ?? '0.0.0';
+      RegExp(r'\d+(\.\d+)?(\.\d+)?').stringMatch(version) ?? '0.0.0';
+  // RegExp(r'\d+\.\d+(\.\d+)?').stringMatch(version) ?? '0.0.0';
+  //RegExp(r'\d+\.\d+(\.[a-z]+)?(\.([^"]|\\")*)?').stringMatch(version) ?? '0.0.0'; \d+(\.\d+)?(\.\d+)?
 
   /// iOS info is fetched by using the iTunes lookup API, which returns a
   /// JSON document.
   Future<VersionStatus?> _getiOSStoreVersion(PackageInfo packageInfo) async {
     final id = iOSId ?? packageInfo.packageName;
-    final parameters = {"bundleId": id};
+    // final parameters = {"bundleId": id};
+
+    Map<String, dynamic> parameters = {};
+
+    /// programmermager:fix/issue-35-ios-failed-host-lookup
+    if (id.contains('.')) {
+      parameters['bundleId'] = id;
+    } else {
+      parameters['id'] = id;
+    }
+
+    parameters['timestamp'] = DateTime.now().millisecondsSinceEpoch.toString();
+
     if (iOSAppStoreCountry != null) {
       parameters.addAll({"country": iOSAppStoreCountry!});
     }
     var uri = Uri.https("itunes.apple.com", "/lookup", parameters);
-    final response = await http.get(uri);
+    // final response = await http.get(uri);
+    http.Response response;
+    try {
+      response = await http.get(uri);
+    } catch (e) {
+      debugPrint('Failed to query iOS App Store\n$e');
+      return null;
+    }
+
     if (response.statusCode != 200) {
       debugPrint('Failed to query iOS App Store');
       return null;
@@ -184,9 +205,21 @@ class CheckUpdate {
   Future<VersionStatus?> _getAndroidStoreVersion(
       PackageInfo packageInfo) async {
     final id = androidId ?? packageInfo.packageName;
-    final uri = Uri.https("play.google.com", "/store/apps/details",
-        {"id": id.toString(), "hl": androidPlayStoreCountry ?? "en_US"});
-    final response = await http.get(uri);
+    // final uri = Uri.https("play.google.com", "/store/apps/details", {"id": id.toString(), "hl": androidPlayStoreCountry ?? "en_US"});
+    // final response = await http.get(uri);
+    final uri = Uri.https("play.google.com", "/store/apps/details", {
+      "id": id.toString(),
+      "hl": androidPlayStoreCountry ?? "en_US",
+      "timestamp": DateTime.now().millisecondsSinceEpoch.toString(),
+    });
+    http.Response response;
+    try {
+      response = await http.get(uri);
+    } catch (e) {
+      debugPrint('Failed to query Google Play Store\n$e');
+      return null;
+    }
+
     if (response.statusCode != 200) {
       throw Exception("Invalid response code: ${response.statusCode}");
     }
@@ -254,7 +287,7 @@ class CheckUpdate {
     String dialogTitle = 'Update Available',
     String? dialogText,
     String updateButtonText = 'Update',
-    bool allowDismissal = true,
+    bool allowDismissal = false,
     String dismissButtonText = 'Maybe Later',
     VoidCallback? dismissAction,
     LaunchModeVersion launchModeVersion = LaunchModeVersion.normal,
@@ -263,10 +296,10 @@ class CheckUpdate {
       children: [
         Text(
           dialogTitle,
-          style: TextStyle(
+          style: const TextStyle(
               fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black),
         ),
-        Divider()
+        const Divider()
       ],
     );
     final dialogTextWidget = Column(
@@ -274,21 +307,21 @@ class CheckUpdate {
         Text(
           dialogText ??
               'A new version of is Available. Version ${versionStatus.storeVersion} is now Available, your version is ${versionStatus.localVersion}.',
-          style: TextStyle(
+          style: const TextStyle(
               fontSize: 16, fontWeight: FontWeight.w400, color: Colors.black),
         ),
-        SizedBox(height: 20),
+        const SizedBox(height: 20),
         RichText(
           text: TextSpan(
               text: "Whats new:\n",
-              style: TextStyle(
+              style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.black),
               children: <TextSpan>[
                 TextSpan(
                     text: versionStatus.releaseNotes,
-                    style: TextStyle(
+                    style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
                         color: Colors.black))
@@ -296,15 +329,11 @@ class CheckUpdate {
         ),
       ],
     );
-
     final launchMode = launchModeVersion == LaunchModeVersion.external
         ? LaunchMode.externalApplication
         : LaunchMode.platformDefault;
 
-    final updateButtonTextWidget = Text(
-      updateButtonText,
-      style: TextStyle(fontWeight: FontWeight.w600),
-    );
+    final updateButtonTextWidget = Text(updateButtonText);
 
     List<Widget> actions = [
       Platform.isAndroid
