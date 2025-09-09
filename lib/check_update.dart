@@ -1,10 +1,11 @@
-library check_update;
+library;
 
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_html/flutter_html.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -101,6 +102,8 @@ class CheckUpdate {
   //Html original body request
   final bool androidHtmlReleaseNotes;
 
+  final bool canSkipUpdate;
+
   CheckUpdate({
     this.androidId,
     this.iOSId,
@@ -108,6 +111,7 @@ class CheckUpdate {
     this.forceAppVersion,
     this.androidPlayStoreCountry,
     this.androidHtmlReleaseNotes = false,
+    this.canSkipUpdate = true,
   });
 
   /// This checks the version status, then displays a platform-specific alert
@@ -124,6 +128,7 @@ class CheckUpdate {
         context: context,
         versionStatus: versionStatus,
         launchModeVersion: launchModeVersion,
+        allowDismissal: canSkipUpdate,
       );
     }
   }
@@ -139,7 +144,8 @@ class CheckUpdate {
       return _getAndroidStoreVersion(packageInfo);
     } else {
       debugPrint(
-          'The target platform "${Platform.operatingSystem}" is not yet supported by this package.');
+        'The target platform "${Platform.operatingSystem}" is not yet supported by this package.',
+      );
       return null;
     }
   }
@@ -193,8 +199,9 @@ class CheckUpdate {
     }
     return VersionStatus._(
       localVersion: _getCleanVersion(packageInfo.version),
-      storeVersion:
-          _getCleanVersion(forceAppVersion ?? jsonObj['results'][0]['version']),
+      storeVersion: _getCleanVersion(
+        forceAppVersion ?? jsonObj['results'][0]['version'],
+      ),
       originalStoreVersion: forceAppVersion ?? jsonObj['results'][0]['version'],
       appStoreLink: jsonObj['results'][0]['trackViewUrl'],
       releaseNotes: jsonObj['results'][0]['releaseNotes'],
@@ -203,7 +210,8 @@ class CheckUpdate {
 
   /// Android info is fetched by parsing the html of the app store page.
   Future<VersionStatus?> _getAndroidStoreVersion(
-      PackageInfo packageInfo) async {
+    PackageInfo packageInfo,
+  ) async {
     final id = androidId ?? packageInfo.packageName;
     // final uri = Uri.https("play.google.com", "/store/apps/details", {"id": id.toString(), "hl": androidPlayStoreCountry ?? "en_US"});
     // final response = await http.get(uri);
@@ -225,22 +233,30 @@ class CheckUpdate {
     }
     // Supports 1.2.3 (most of the apps) and 1.2.prod.3 (e.g. Google Cloud)
     //final regexp = RegExp(r'\[\[\["(\d+\.\d+(\.[a-z]+)?\.\d+)"\]\]');
-    final regexp =
-        RegExp(r'\[\[\[\"(\d+\.\d+(\.[a-z]+)?(\.([^"]|\\")*)?)\"\]\]');
+    final regexp = RegExp(
+      r'\[\[\[\"(\d+\.\d+(\.[a-z]+)?(\.([^"]|\\")*)?)\"\]\]',
+    );
     final storeVersion = regexp.firstMatch(response.body)?.group(1);
 
     //Description
     //final regexpDescription = RegExp(r'\[\[(null,)\"((\.[a-z]+)?(([^"]|\\")*)?)\"\]\]');
 
     //Release
-    final regexpRelease =
-        RegExp(r'\[(null,)\[(null,)\"((\.[a-z]+)?(([^"]|\\")*)?)\"\]\]');
+    final regexpRelease = RegExp(
+      r'\[(null,)\[(null,)\"((\.[a-z]+)?(([^"]|\\")*)?)\"\]\]',
+    );
 
-    final expRemoveSc = RegExp(r"\\u003c[A-Za-z]{1,10}\\u003e",
-        multiLine: true, caseSensitive: true);
+    final expRemoveSc = RegExp(
+      r"\\u003c[A-Za-z]{1,10}\\u003e",
+      multiLine: true,
+      caseSensitive: true,
+    );
 
-    final expRemoveQuote =
-        RegExp(r"\\u0026quot;", multiLine: true, caseSensitive: true);
+    final expRemoveQuote = RegExp(
+      r"\\u0026quot;",
+      multiLine: true,
+      caseSensitive: true,
+    );
 
     final releaseNotes = regexpRelease.firstMatch(response.body)?.group(3);
     //final descriptionNotes = regexpDescription.firstMatch(response.body)?.group(2);
@@ -253,8 +269,8 @@ class CheckUpdate {
       releaseNotes: androidHtmlReleaseNotes
           ? _parseUnicodeToString(releaseNotes)
           : releaseNotes
-              ?.replaceAll(expRemoveSc, '')
-              .replaceAll(expRemoveQuote, '"'),
+                ?.replaceAll(expRemoveSc, '')
+                .replaceAll(expRemoveQuote, '"'),
     );
   }
 
@@ -266,10 +282,7 @@ class CheckUpdate {
     required BuildContext context,
     LaunchMode launchMode = LaunchMode.platformDefault,
   }) {
-    launchAppStore(
-      appStoreLink,
-      launchMode: launchMode,
-    );
+    launchAppStore(appStoreLink, launchMode: launchMode);
     if (allowDismissal) {
       Navigator.of(context, rootNavigator: true).pop();
     }
@@ -287,48 +300,105 @@ class CheckUpdate {
     String dialogTitle = 'Update Available',
     String? dialogText,
     String updateButtonText = 'Update',
-    bool allowDismissal = false,
+    bool allowDismissal = true,
     String dismissButtonText = 'Maybe Later',
     VoidCallback? dismissAction,
     LaunchModeVersion launchModeVersion = LaunchModeVersion.normal,
   }) async {
     final dialogTitleWidget = Column(
       children: [
-        Text(
-          dialogTitle,
-          style: const TextStyle(
-              fontSize: 20, fontWeight: FontWeight.w600, color: Colors.black),
-        ),
-        const Divider()
+        Text(dialogTitle, style: TextStyle(fontSize: 18)),
+        Divider(),
       ],
     );
     final dialogTextWidget = Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          dialogText ??
-              'A new version of is Available. Version ${versionStatus.storeVersion} is now Available, your version is ${versionStatus.localVersion}.',
-          style: const TextStyle(
-              fontSize: 16, fontWeight: FontWeight.w400, color: Colors.black),
-        ),
-        const SizedBox(height: 20),
+        // Text(
+        //   dialogText ??
+        //       'A new version of is Available. Version ${versionStatus.storeVersion} is now Available, your version is ${versionStatus.localVersion}.',
+        //   style: TextStyle(fontSize: 14),
+        // ),
         RichText(
+          textAlign: TextAlign.center,
           text: TextSpan(
-              text: "Whats new:\n",
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black),
-              children: <TextSpan>[
-                TextSpan(
-                    text: versionStatus.releaseNotes,
-                    style: const TextStyle(
+            text: dialogText ?? 'A new version of is Available.\nVersion ',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w400,
+              color: Colors.black,
+            ),
+            children: dialogText == null
+                ? <TextSpan>[
+                    TextSpan(
+                      text: versionStatus.storeVersion,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
+                    ),
+                    TextSpan(
+                      text: ' is now Available,\nyour version is ',
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
-                        color: Colors.black))
-              ]),
+                        color: Colors.black,
+                      ),
+                    ),
+                    TextSpan(
+                      text: versionStatus.localVersion,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ]
+                : null,
+          ),
         ),
+        const SizedBox(height: 20),
+        if (versionStatus.releaseNotes != null)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Text(
+                "Whats new:",
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+              ),
+              Platform.isIOS
+                  ? Text(
+                      versionStatus.releaseNotes!,
+                      textAlign: TextAlign.left,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        color: Colors.black,
+                      ),
+                    )
+                  : Html(
+                      data: versionStatus.releaseNotes,
+                      style: {
+                        "*": Style(
+                          fontSize: FontSize(14),
+                          margin: Margins.all(0),
+                          padding: HtmlPaddings.all(0),
+                        ),
+                      },
+                    ),
+            ],
+          ),
       ],
     );
+
     final launchMode = launchModeVersion == LaunchModeVersion.external
         ? LaunchMode.externalApplication
         : LaunchMode.platformDefault;
@@ -359,7 +429,8 @@ class CheckUpdate {
 
     if (allowDismissal) {
       final dismissButtonTextWidget = Text(dismissButtonText);
-      dismissAction = dismissAction ??
+      dismissAction =
+          dismissAction ??
           () => Navigator.of(context, rootNavigator: true).pop();
       actions.add(
         Platform.isAndroid
@@ -378,19 +449,20 @@ class CheckUpdate {
       context: context,
       barrierDismissible: allowDismissal,
       builder: (BuildContext context) {
-        return WillPopScope(
-            child: Platform.isAndroid
-                ? AlertDialog(
-                    title: dialogTitleWidget,
-                    content: dialogTextWidget,
-                    actions: actions,
-                  )
-                : CupertinoAlertDialog(
-                    title: dialogTitleWidget,
-                    content: dialogTextWidget,
-                    actions: actions,
-                  ),
-            onWillPop: () => Future.value(allowDismissal));
+        return PopScope(
+          canPop: allowDismissal,
+          child: Platform.isAndroid
+              ? AlertDialog(
+                  title: dialogTitleWidget,
+                  content: dialogTextWidget,
+                  actions: actions,
+                )
+              : CupertinoAlertDialog(
+                  title: dialogTitleWidget,
+                  content: dialogTextWidget,
+                  actions: actions,
+                ),
+        );
       },
     );
   }
@@ -401,10 +473,7 @@ class CheckUpdate {
     LaunchMode launchMode = LaunchMode.platformDefault,
   }) async {
     if (await canLaunchUrl(Uri.parse(appStoreLink))) {
-      await launchUrl(
-        Uri.parse(appStoreLink),
-        mode: launchMode,
-      );
+      await launchUrl(Uri.parse(appStoreLink), mode: launchMode);
     } else {
       throw 'Could not launch appStoreLink';
     }
