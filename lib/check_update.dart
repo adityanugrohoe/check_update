@@ -294,7 +294,7 @@ class CheckUpdate {
   /// To change the appearance and behavior of the update dialog, you can
   /// optionally provide [dialogTitle], [dialogText], [updateButtonText],
   /// [dismissButtonText], and [dismissAction] parameters.
-  void showUpdateDialog({
+  Future showUpdateDialog({
     required BuildContext context,
     required VersionStatus versionStatus,
     String dialogTitle = 'Update Available',
