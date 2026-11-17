@@ -1,14 +1,20 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_html/flutter_html.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+// Web-safe platform checks (dart:io Platform throws on web). Web/desktop are
+// reported as neither Android nor iOS, so getVersionStatus returns null there.
+bool get _isIOS => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+bool get _isAndroid =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
 /// Information about the app's current version, and the most recent version
 /// available in the Apple App Store or Google Play Store.
@@ -138,13 +144,13 @@ class CheckUpdate {
   /// way.
   Future<VersionStatus?> getVersionStatus() async {
     PackageInfo packageInfo = await PackageInfo.fromPlatform();
-    if (Platform.isIOS) {
+    if (_isIOS) {
       return _getiOSStoreVersion(packageInfo);
-    } else if (Platform.isAndroid) {
+    } else if (_isAndroid) {
       return _getAndroidStoreVersion(packageInfo);
     } else {
       debugPrint(
-        'The target platform "${Platform.operatingSystem}" is not yet supported by this package.',
+        'The target platform "${kIsWeb ? 'web' : defaultTargetPlatform.name}" is not yet supported by this package.',
       );
       return null;
     }
@@ -374,7 +380,7 @@ class CheckUpdate {
                   color: Colors.black,
                 ),
               ),
-              Platform.isIOS
+              _isIOS
                   ? Text(
                       versionStatus.releaseNotes!,
                       textAlign: TextAlign.left,
@@ -384,15 +390,9 @@ class CheckUpdate {
                         color: Colors.black,
                       ),
                     )
-                  : Html(
-                      data: versionStatus.releaseNotes,
-                      style: {
-                        "*": Style(
-                          fontSize: FontSize(14),
-                          margin: Margins.all(0),
-                          padding: HtmlPaddings.all(0),
-                        ),
-                      },
+                  : HtmlWidget(
+                      versionStatus.releaseNotes ?? '',
+                      textStyle: const TextStyle(fontSize: 14),
                     ),
             ],
           ),
@@ -406,7 +406,7 @@ class CheckUpdate {
     final updateButtonTextWidget = Text(updateButtonText);
 
     List<Widget> actions = [
-      Platform.isAndroid
+      _isAndroid
           ? TextButton(
               onPressed: () => _updateActionFunc(
                 allowDismissal: allowDismissal,
@@ -433,7 +433,7 @@ class CheckUpdate {
           dismissAction ??
           () => Navigator.of(context, rootNavigator: true).pop();
       actions.add(
-        Platform.isAndroid
+        _isAndroid
             ? TextButton(
                 onPressed: dismissAction,
                 child: dismissButtonTextWidget,
@@ -451,7 +451,7 @@ class CheckUpdate {
       builder: (BuildContext context) {
         return PopScope(
           canPop: allowDismissal,
-          child: Platform.isAndroid
+          child: _isAndroid
               ? AlertDialog(
                   title: dialogTitleWidget,
                   content: dialogTextWidget,
